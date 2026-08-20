@@ -1,0 +1,48 @@
+{
+  "name": "ai-assistant-backend",
+  "version": "1.0.0",
+  "description": "AI Assistant Platform — Node.js + Express + PostgreSQL backend",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "test": "node test/dynamic-rubric.test.mjs",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push --accept-data-loss",
+    "prisma:migrate": "prisma migrate deploy",
+    "seed": "node src/seed.js",
+    "reset": "node src/reset.js",
+    "translate:criteria": "node src/translateCriteria.js",
+    "postinstall": "prisma generate"
+  },
+  "prisma": {
+    "seed": "node src/seed.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "adm-zip": "^0.5.16",
+    "agora-token": "^2.0.5",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dejavu-fonts-ttf": "^2.37.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "express-rate-limit": "^7.4.1",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "mammoth": "^1.8.0",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "node-fetch": "^3.3.2",
+    "pdf-parse": "^1.1.1",
+    "pdfkit": "^0.15.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7",
+    "prisma": "^5.22.0"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}

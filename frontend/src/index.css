@@ -1,0 +1,475 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Brand tokens — single source of truth for the colors that live outside
+   antd's own theme (main.jsx sets the same primary/semantic hexes for antd's
+   components; these back the platform's own CSS: the nav icon chips, focus
+   rings, selection color, and the AI-graded accent below). */
+:root {
+  --brand: #1c9de9;
+  --brand-rgb: 28, 157, 233;
+  --brand-light: #6abff0;
+  --success: #12b76a;
+  --warning: #f79009;
+  --error: #f04438;
+  /* Reserved for AI-graded content specifically (see .ai-tag) — the one
+     accent that isn't "brand blue," so a Gemini-graded result reads as
+     distinct from the platform's own chrome at a glance. */
+  --ai-accent: #7c5cfc;
+  --ai-accent-rgb: 124, 92, 252;
+  /* Navy-tinted shadow base (Untitled UI's own #101828) — every soft shadow
+     in the app (see main.jsx theme + .card-hover below) is layered rgba()
+     stops off this one value instead of flat black, which is what actually
+     reads as "premium SaaS" rather than a default UI-kit drop-shadow. */
+  --shadow-rgb: 16, 24, 40;
+}
+
+html, body, #root { height: 100%; margin: 0; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #f2f8fc;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Plus Jakarta Sans for anything that sets the page's voice — headings, the
+   sidebar brand lockup, nav labels, buttons — Inter stays the body/data
+   workhorse (tables, forms, paragraphs). Two faces with a clear division of
+   labor, not antd's single system-font default. */
+h1, h2, h3, h4,
+.ant-typography h1, .ant-typography h2, .ant-typography h3, .ant-typography h4,
+.ant-menu, .ant-btn, .brand-face {
+  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+/* Numbers stay in Inter everywhere (tabular figures, denser numeral shapes) —
+   Statistic tiles are data, not a headline, even where they sit in a card
+   whose title uses the display face. */
+.ant-statistic-content { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-variant-numeric: tabular-nums; }
+.ant-typography h1, .ant-typography h2, .ant-typography h3, .ant-typography h4 {
+  letter-spacing: -0.01em;
+}
+
+::selection { background: rgba(var(--brand-rgb), 0.22); }
+
+/* Visible keyboard focus in the brand color, everywhere — antd's own focus
+   ring is easy to lose against a light layout background. */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.page-fallback {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 60vh; width: 100%;
+}
+
+/* Tag for AI-graded results (SubmissionDetail) — the platform's one
+   deliberate departure from brand blue, so "graded by AI" reads as its own
+   category rather than another blue label among many. */
+.ai-tag {
+  color: var(--ai-accent) !important;
+  background: rgba(var(--ai-accent-rgb), 0.1) !important;
+  border-color: rgba(var(--ai-accent-rgb), 0.28) !important;
+  font-weight: 500;
+}
+
+/* Subtle lift on interactive cards (stat cards, list cards) */
+.ant-card.card-hover {
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.ant-card.card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 28px -8px rgba(var(--shadow-rgb), 0.16), 0 4px 10px rgba(var(--brand-rgb), 0.08);
+}
+
+/* ---- Premium surface helpers --------------------------------------------
+   Two reusable building blocks for "this screen is the first thing a client
+   sees" moments (the login screen today; any future landing/empty-state
+   hero): a slow-drifting gradient-mesh backdrop, and a frosted glass panel
+   to sit on top of it. Kept generic (not login-specific class names) so any
+   page can reach for the same premium treatment instead of inventing a new
+   one. */
+.mesh-bg {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.mesh-bg::before,
+.mesh-bg::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  z-index: -1;
+  opacity: 0.55;
+  animation: mesh-drift 16s ease-in-out infinite alternate;
+}
+.mesh-bg::before {
+  width: 46vw;
+  height: 46vw;
+  max-width: 620px;
+  max-height: 620px;
+  top: -14vw;
+  left: -10vw;
+  background: radial-gradient(circle at 30% 30%, var(--brand-light), var(--brand) 70%);
+}
+.mesh-bg::after {
+  width: 40vw;
+  height: 40vw;
+  max-width: 560px;
+  max-height: 560px;
+  bottom: -16vw;
+  right: -8vw;
+  background: radial-gradient(circle at 60% 40%, var(--ai-accent), transparent 70%);
+  animation-delay: -8s;
+  animation-duration: 20s;
+}
+@keyframes mesh-drift {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(4%, 5%) scale(1.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mesh-bg::before, .mesh-bg::after { animation: none; }
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 24px 48px -12px rgba(var(--shadow-rgb), 0.22), 0 8px 16px -8px rgba(var(--shadow-rgb), 0.12);
+}
+
+@keyframes premiumEnter {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.premium-enter { animation: premiumEnter 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Route-transition fade so lazy pages appear smoothly */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-enter { animation: fadeInUp 0.25s ease both; }
+
+/* ---- Sidebar ------------------------------------------------------------
+   Each nav icon sits in its own rounded chip (see NavIcon in DashboardLayout)
+   instead of floating bare against the dark sider — the same "icon in a
+   tinted rounded square" language StatCard already uses on the light side of
+   the app, carried into the dark nav so the two don't feel like different
+   products. Inactive rows get a quiet glass chip; the selected row's chip
+   goes solid brand blue with a soft glow, which is what actually reads as
+   "selected" at a glance — antd's own row highlight is there too, but it's
+   subtle against a dark sider on its own. */
+.nav-icon-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.68);
+  background: rgba(255, 255, 255, 0.06);
+  transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+.ant-menu-item:hover .nav-icon-chip {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+.ant-menu-item-selected .nav-icon-chip {
+  color: #fff;
+  background: var(--brand);
+  box-shadow: 0 2px 10px rgba(var(--brand-rgb), 0.55);
+}
+/* The sider's own collapse trims the row to icon-only; recenter the chip so
+   it doesn't hug the left edge the way a bare icon would. */
+.ant-menu-inline-collapsed .nav-icon-chip { margin-inline: auto; }
+
+/* Header controls (collapse toggle, notification bell) get the same
+   "tinted rounded chip" treatment as the sidebar, just on light ground —
+   a bare icon floating next to the header search box was the one spot that
+   still looked like an untouched antd default. */
+.header-icon-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  color: #485b6b;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+.header-icon-chip:hover {
+  background: rgba(var(--brand-rgb), 0.1);
+  color: var(--brand);
+}
+/* Notification bell: tinted at rest, not just on hover — it's the one header
+   control that's worth noticing even before the cursor gets there. */
+.header-icon-chip--accent {
+  color: var(--brand);
+  background: rgba(var(--brand-rgb), 0.08);
+}
+.header-icon-chip--accent:hover { background: rgba(var(--brand-rgb), 0.16); }
+
+/* The sider is pinned to the viewport height, so on a short screen the last
+   menu items (settings, help) used to fall below the fold with no way to reach
+   them. Laying the sider out as a column lets the menu take the remaining space
+   and scroll on its own, while the logo stays put. */
+.ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sider-menu {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 12px;
+}
+/* A light-on-dark scrollbar; the default one is invisible against the sider. */
+.sider-menu { scrollbar-color: rgba(255, 255, 255, 0.22) transparent; }
+.sider-menu::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.22); }
+.sider-menu::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.36); }
+
+/* ---- Dialogs ------------------------------------------------------------
+   Roomier padding and a clear divider under the title, so a form inside a
+   dialog reads as a form rather than as a stack of boxes. */
+.ant-modal .ant-modal-header { margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid #eef5fa; }
+.ant-modal .ant-modal-title { font-size: 17px; font-weight: 600; }
+.ant-modal .ant-modal-body { padding-block: 4px; }
+.ant-modal .ant-modal-footer { margin-top: 20px; padding-top: 14px; border-top: 1px solid #eef5fa; }
+/* On a phone a centered dialog must never be taller than the screen. */
+.ant-modal .ant-modal-body { max-height: calc(100vh - 220px); overflow-y: auto; }
+
+/* ---- Bare tables ----------------------------------------------------------
+   Most CRUD list pages (Users, Groups, Assignments, Criteria, …) render
+   <Table> directly against the page background — antd's own table carries no
+   elevation of its own, so every one of those screens read as a flat,
+   unstyled grid next to the polished dashboards. Give every table wrapper the
+   same "surface" language as the rest of the app — rounded corners, a
+   hairline border, a soft shadow — so a list page reads as a card even where
+   the JSX never wrapped it in one. A table that *is* already inside a Card,
+   Modal or Drawer just drops the duplicate border/shadow instead of nesting
+   two visible surfaces. */
+.ant-table-wrapper {
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #e8f0f7;
+  box-shadow: 0 1px 3px rgba(var(--shadow-rgb), 0.08), 0 1px 2px rgba(var(--shadow-rgb), 0.04);
+  overflow: hidden;
+}
+.ant-card .ant-table-wrapper,
+.ant-modal .ant-table-wrapper,
+.ant-drawer .ant-table-wrapper {
+  border: none;
+  box-shadow: none;
+  border-radius: 8px;
+}
+.ant-table-wrapper .ant-table-pagination.ant-table-pagination { margin: 16px; }
+.ant-table-tbody > tr > td { transition: background 0.12s ease; }
+.ant-table-tbody > tr:not(.ant-table-placeholder):hover > td { background: rgba(var(--brand-rgb), 0.045) !important; }
+.ant-table-thead > tr > th { font-weight: 600; color: #45566a; }
+
+/* ---- Page toolbar ---------------------------------------------------------
+   The header row every list page opens with (title + search/filter/create
+   controls) — used together with DashboardHero so the "wow" bar sits above a
+   toolbar that reads as part of the same design, not a leftover antd Space. */
+.page-toolbar { margin-bottom: 18px; }
+.page-toolbar .ant-input-affix-wrapper,
+.page-toolbar .ant-select .ant-select-selector {
+  border-radius: 10px;
+}
+
+/* Buttons get a touch of lift on hover — the one micro-interaction that
+   makes the whole UI feel responsive rather than static, mirroring the
+   card-hover lift already used on stat/list cards. */
+.ant-btn:not(.ant-btn-icon-only):not([disabled]) {
+  transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.15s ease, background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.ant-btn-primary:not([disabled]):hover { transform: translateY(-1px); }
+
+/* Empty states get a little more air than antd's tight default so they don't
+   read as an error state on a freshly-loaded page. */
+.ant-empty { padding: 32px 0; }
+
+/* Slimmer, quieter scrollbars */
+* { scrollbar-width: thin; scrollbar-color: #b9d2e8 transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: #b9d2e8; border-radius: 8px; }
+*::-webkit-scrollbar-thumb:hover { background: #93b9de; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* ---- Premium pass 2 --------------------------------------------------
+   A round of polish modeled on a marketplace reference the client is
+   benchmarking against: pill-shaped controls, an icon that reacts to its
+   own card's hover instead of sitting static, a livelier sidebar selection,
+   and a header search that reads as a real search box, not a bare antd
+   input. Kept as additive rules (no earlier block rewritten) so every page
+   already using StatCard/DashboardHero/the Sider gets this for free. */
+
+/* StatCard's icon badge: a quiet tilt+scale on the card's own hover
+   (card-hover already lifts the whole card) so the icon feels alive
+   instead of just riding along. */
+.stat-icon { transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1); }
+.card-hover:hover .stat-icon { transform: scale(1.08) rotate(-4deg); }
+
+/* DashboardHero's accent bar grows in from zero height on mount instead of
+   appearing pre-drawn — a small "this page just loaded" cue that costs
+   nothing (fires once per page-enter, not on every re-render). */
+@keyframes heroBarGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.hero-accent-bar { transform-origin: center; animation: heroBarGrow 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: 0.08s; }
+
+/* Pill-shaped segmented/tab controls — the rounded grey-track, white-thumb
+   toggle (e.g. teacher Literature/Criteria tabs) styled to read as one
+   deliberate control instead of antd's flat default ink-bar tabs. */
+.ant-segmented {
+  padding: 3px;
+  border-radius: 11px;
+  background: #eaf3fa;
+}
+.ant-segmented .ant-segmented-item-selected {
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(var(--shadow-rgb), 0.12);
+}
+.ant-tabs .ant-tabs-nav::before { border-bottom-color: #e8f0f7; }
+.ant-tabs .ant-tabs-tab {
+  padding: 8px 4px;
+  transition: color 0.15s ease;
+}
+.ant-tabs .ant-tabs-tab + .ant-tabs-tab { margin-left: 28px; }
+.ant-tabs .ant-tabs-ink-bar { border-radius: 3px; height: 3px; }
+
+/* Header search: a real pill search field with a soft focus glow, matching
+   the "search-first" header pattern of the reference rather than a plain
+   bordered antd input. */
+.header-search.ant-input-affix-wrapper {
+  border-radius: 999px;
+  transition: box-shadow 0.2s ease, background 0.2s ease;
+}
+.header-search.ant-input-affix-wrapper:hover { background: #eef7fc; }
+.header-search.ant-input-affix-wrapper-focused,
+.header-search.ant-input-affix-wrapper:focus-within {
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(var(--brand-rgb), 0.12);
+}
+
+/* Sidebar selection: the icon already gets a solid chip (.nav-icon-chip
+   above) — extend the same brand-gradient treatment to the full row so the
+   active item reads as one cohesive pill, with a soft glow that echoes the
+   icon's own shadow rather than antd's flat highlight color. */
+.ant-menu-dark.ant-menu-inline .ant-menu-item-selected {
+  background: linear-gradient(90deg, rgba(var(--brand-rgb), 0.22), rgba(var(--brand-rgb), 0.06)) !important;
+  box-shadow: inset 0 0 0 1px rgba(var(--brand-rgb), 0.3);
+}
+.ant-menu-dark.ant-menu-inline .ant-menu-item {
+  transition: background 0.16s ease, transform 0.16s ease;
+}
+.ant-menu-dark.ant-menu-inline .ant-menu-item:active { transform: scale(0.98); }
+
+/* Notification/user dropdown menus: same soft-shadow language as
+   everything else, not antd's default flat popup. */
+.ant-dropdown .ant-dropdown-menu,
+.ant-select-dropdown {
+  border-radius: 12px;
+  box-shadow: 0 16px 32px -8px rgba(var(--shadow-rgb), 0.2), 0 4px 10px rgba(var(--shadow-rgb), 0.08);
+}
+
+/* Reusable "zoom on hover" for any image sitting in a card-hover container
+   (subject/course thumbnails, avatars in list rows) — the same
+   product-card micro-interaction the reference uses, kept generic so any
+   page can opt in without new CSS. */
+.img-zoom { overflow: hidden; }
+.img-zoom img { transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1); }
+.card-hover:hover .img-zoom img,
+.img-zoom:hover img { transform: scale(1.06); }
+
+/* Badges/tags: a touch more roundness than antd's default so pills read as
+   pills, matching the buttons/inputs radius language used everywhere else. */
+.ant-tag { border-radius: 6px; }
+.ant-badge-count { box-shadow: 0 0 0 2px #fff; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stat-icon, .hero-accent-bar, .ant-menu-dark.ant-menu-inline .ant-menu-item { animation: none !important; transition: none !important; }
+}
+
+/* ---- Dashboard pilot ------------------------------------------------------
+   A round modeled on a reference dashboard the client benchmarked: stat
+   cards read top-to-bottom instead of popping in together, and list/table
+   previews on the three Dashboard pages get one shared "row card" — icon
+   badge + title/meta + status — instead of a bare antd List.Item or (on a
+   phone) a cramped Table. Purely additive: no existing class above changes
+   meaning, and StudentDashboard's row cards only replace the desktop
+   <Table> below the `sm` breakpoint, so nothing about the data or actions
+   changes, only how a phone renders them. */
+
+/* Stat-card grid stagger — put className="stagger-grid" on the antd <Row>
+   wrapping StatCards; each Col's own .premium-enter (already on StatCard)
+   just fires later instead of needing a second animation. */
+.stagger-grid .ant-col:nth-child(1) .premium-enter { animation-delay: 0.02s; }
+.stagger-grid .ant-col:nth-child(2) .premium-enter { animation-delay: 0.08s; }
+.stagger-grid .ant-col:nth-child(3) .premium-enter { animation-delay: 0.14s; }
+.stagger-grid .ant-col:nth-child(4) .premium-enter { animation-delay: 0.20s; }
+.stagger-grid .ant-col:nth-child(5) .premium-enter { animation-delay: 0.26s; }
+.stagger-grid .ant-col:nth-child(6) .premium-enter { animation-delay: 0.32s; }
+.stagger-grid .ant-col:nth-child(7) .premium-enter { animation-delay: 0.38s; }
+.stagger-grid .ant-col:nth-child(8) .premium-enter { animation-delay: 0.44s; }
+
+.dash-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #f1f3f5;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+.dash-row + .dash-row { margin-top: 8px; }
+.dash-row[data-clickable] { cursor: pointer; }
+.dash-row[data-clickable]:hover { background: rgba(var(--brand-rgb), 0.06); border-color: rgba(var(--brand-rgb), 0.18); }
+.dash-row[data-clickable]:active { transform: scale(0.99); }
+.dash-row-icon {
+  width: 36px; height: 36px; flex: 0 0 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+}
+.dash-row-title { font-size: 13px; font-weight: 600; color: #0f172a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-row-meta { font-size: 12px; color: #8a97a8; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- Mobile CRUD list cards -----------------------------------------------
+   Table-heavy admin/teacher CRUD pages (Users, Groups, Teachers, Students,
+   Assignments) still read as a cramped horizontal-scroll grid on a phone even
+   with the "bare tables" polish above — a table is still a table. Below the
+   `sm` breakpoint these pages swap the <Table> for a stack of cards using the
+   same visual language as the dashboards' `.dash-row` (icon badge + title/
+   meta), just roomier and with its own action-icon-button row for edit/
+   delete/view, since a CRUD row carries more actions than a dashboard
+   preview row does. Additive only — the desktop <Table> is untouched, this
+   class set only fires on each page's mobile branch. */
+.list-card {
+  background: #fff;
+  border: 1px solid #e8f0f7;
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: 0 1px 3px rgba(var(--shadow-rgb), 0.06);
+}
+.list-card + .list-card { margin-top: 10px; }
+.list-card-head { display: flex; align-items: center; gap: 10px; }
+.list-card-title { font-size: 14px; font-weight: 700; color: #0f172a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-card-meta { font-size: 12px; color: #8a97a8; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-card-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.list-card-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.icon-btn {
+  width: 30px; height: 30px; border-radius: 8px; flex: 0 0 30px;
+  border: 1px solid #e5e7eb; background: #f9fafb;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; color: #6b7280; cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.icon-btn:hover { background: #eef7fc; border-color: rgba(var(--brand-rgb), 0.3); color: var(--brand); }
+.icon-btn--danger { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
+.icon-btn--danger:hover { background: #fee2e2; border-color: #fca5a5; }

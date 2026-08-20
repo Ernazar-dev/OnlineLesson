@@ -1,0 +1,573 @@
+// AI Assistant Platform — PostgreSQL schema (Prisma)
+// Ported 1:1 from the original Flask/SQLAlchemy models.
+
+generator client {
+  provider        = "prisma-client-js"
+  // `omit` (per-query field exclusion, e.g. Submission.fileData below) needs
+  // this flag on 5.x — without it the generated client rejects `omit` with
+  // "Unknown argument `omit`" at runtime, which is exactly what silently
+  // broke every route that uses it (assignment submissions list, roster).
+  previewFeatures = ["omitApi"]
+}
+
+datasource db {
+  provider = "postgresql"
+  // If this is Neon: use the *pooled* (PgBouncer, `-pooler` host) string here.
+  // A direct connection dies with Postgres error 57P01 ("terminating
+  // connection due to administrator command") the moment Neon's free-tier
+  // compute autosuspends from idleness — the pooler absorbs that transparently
+  // instead of surfacing it to Prisma as a query failure. `prisma db push` /
+  // `migrate` need the direct (non-pooler) string instead — pass it via
+  // `DATABASE_URL` temporarily when running those, don't wire a permanent
+  // `directUrl` here: Prisma requires it resolvable even for `prisma generate`,
+  // which runs on every Render build (`postinstall`) — an unset `DIRECT_URL`
+  // there would fail the build, not just migrations.
+  url = env("DATABASE_URL")
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique
+  passwordHash String    @map("password_hash")
+  role         String // 'student' | 'teacher' | 'admin'
+  email        String?
+  phone        String?
+  fullName     String?   @map("full_name")
+  departmentId Int?      @map("department_id")
+  groupId      Int?      @map("group_id")
+  isActive     Boolean   @default(true) @map("is_active")
+  lastSeen     DateTime? @default(now()) @map("last_seen")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  department Department? @relation(fields: [departmentId], references: [id])
+  group      Group?      @relation("GroupMembers", fields: [groupId], references: [id])
+
+  profile             UserProfile?
+  submissions         Submission[]
+  reviewedSubmissions Submission[]        @relation("SubmissionReviewer")
+  notifications       Notification[]
+  academicRatings     AcademicRating[]
+  studentSubjects     StudentSubject[]
+  teacherSubjects     TeacherSubject[]
+  activityLogs        ActivityLog[]
+  news                News[]
+  managedGroups       Group[]             @relation("GroupTeacher")
+  assignments         Assignment[]
+  criterionTemplates  CriterionTemplate[]
+  teacherStudents     TeacherStudent[]    @relation("TS_Teacher")
+  studentTeachers     TeacherStudent[]    @relation("TS_Student")
+  bookDownloads       BookDownload[]
+  deadlineExtensions  DeadlineExtension[]
+  plagiarismFlags     PlagiarismMatch[]
+  liveSessions        LiveSession[]
+  liveParticipations  LiveParticipant[]
+
+  @@index([username])
+  @@map("user")
+}
+
+model Group {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  teacherId Int?     @map("teacher_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  teacher      User?         @relation("GroupTeacher", fields: [teacherId], references: [id])
+  members      User[]        @relation("GroupMembers")
+  assignments  Assignment[]
+  liveSessions LiveSession[]
+
+  @@map("group")
+}
+
+model Department {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  users    User[]
+  subjects Subject[]
+
+  @@map("department")
+}
+
+model Subject {
+  id           Int      @id @default(autoincrement())
+  name         String
+  code         String?  @unique
+  description  String?  @db.Text
+  departmentId Int?     @map("department_id")
+  /// The card picture an admin sets on /admin/subjects, stored in Postgres
+  /// (Neon) like Book.coverData — Render's free web service has no persistent
+  /// disk, so anything saved under `uploads/` is gone on the next deploy.
+  imageData    Bytes?   @map("image_data")
+  imageMime    String?  @map("image_mime") @db.VarChar(150)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  department      Department?      @relation(fields: [departmentId], references: [id])
+  teacherSubjects TeacherSubject[]
+  teacherStudents TeacherStudent[]
+  studentSubjects StudentSubject[]
+  academicRatings AcademicRating[]
+  books           Book[]
+  assignments     Assignment[]
+  liveSessions    LiveSession[]
+
+  @@map("subject")
+}
+
+model TeacherSubject {
+  id        Int      @id @default(autoincrement())
+  teacherId Int      @map("teacher_id")
+  subjectId Int      @map("subject_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  teacher User    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, subjectId])
+  @@map("teacher_subject")
+}
+
+model TeacherStudent {
+  id        Int      @id @default(autoincrement())
+  teacherId Int      @map("teacher_id")
+  studentId Int      @map("student_id")
+  subjectId Int      @map("subject_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  teacher User    @relation("TS_Teacher", fields: [teacherId], references: [id], onDelete: Cascade)
+  student User    @relation("TS_Student", fields: [studentId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, studentId, subjectId])
+  @@map("teacher_student")
+}
+
+model Assignment {
+  id             Int       @id @default(autoincrement())
+  title          String    @db.VarChar(500)
+  description    String?   @db.Text
+  course         String?
+  assignmentType String?   @map("assignment_type")
+  /// When the assignment opens. Null means "open from the moment it was
+  /// created" — every assignment made before this field existed.
+  startAt        DateTime? @map("start_at")
+  /// When it closes. Together with `startAt` this is the "from … to" window
+  /// students see and the submit route enforces.
+  deadline       DateTime?
+  teacherId      Int?      @map("teacher_id")
+  groupId        Int?      @map("group_id")
+  subjectId      Int?      @map("subject_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  teacher            User?               @relation(fields: [teacherId], references: [id])
+  group              Group?              @relation(fields: [groupId], references: [id])
+  subject            Subject?            @relation(fields: [subjectId], references: [id])
+  submissions        Submission[]
+  notifications      Notification[]
+  criteria           Criterion[]
+  deadlineExtensions DeadlineExtension[]
+
+  @@map("assignment")
+}
+
+/// A per-student deadline override. When a teacher reopens an assignment for
+/// students who missed the original deadline, one row is written per student;
+/// the submit route treats `newDeadline` as that student's effective deadline.
+model DeadlineExtension {
+  id           Int      @id @default(autoincrement())
+  assignmentId Int      @map("assignment_id")
+  studentId    Int      @map("student_id")
+  newDeadline  DateTime @map("new_deadline")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student    User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, studentId])
+  @@map("deadline_extension")
+}
+
+/// A single rubric row the teacher defines for an assignment. When an
+/// assignment has no criteria, grading falls back to the 9 standard sections.
+model Criterion {
+  id              Int      @id @default(autoincrement())
+  assignmentId    Int      @map("assignment_id")
+  /// The canonical (as-typed) name. Never localised: it is the rubric key the
+  /// submission form, the grader and SectionScore.sectionName all agree on.
+  name            String
+  description     String?  @db.Text // what a good answer must contain
+  /// JSON `{"uz":"…","ru":"…","en":"…"}` used for display only, so a criterion
+  /// reads in the viewer's language. Missing => fall back to `name`.
+  nameI18n        String?  @map("name_i18n") @db.Text
+  descriptionI18n String?  @map("description_i18n") @db.Text
+  weight          Float    @default(1) // relative weight; normalised at grading time
+  maxScore        Int      @default(100) @map("max_score")
+  /// JSON map of score band -> what that band looks like, e.g.
+  /// {"0":"missing","50":"present but shallow","100":"complete and justified"}
+  levels          String?  @db.Text
+  position        Int      @default(0)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  assignment    Assignment     @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  sectionScores SectionScore[]
+
+  @@index([assignmentId])
+  @@map("criterion")
+}
+
+/// A teacher's reusable rubric row. Teachers curate their own library of
+/// criteria on the "Criteria" page; when creating an assignment they pick which
+/// ones apply, and the chosen rows are copied into that assignment's Criterion
+/// records. Editing a template later never rewrites already-created assignments.
+model CriterionTemplate {
+  id              Int      @id @default(autoincrement())
+  teacherId       Int      @map("teacher_id")
+  /// As typed by the teacher; the localised variants live in `nameI18n`.
+  name            String
+  description     String?  @db.Text
+  /// JSON `{"uz":"…","ru":"…","en":"…"}` — filled from the standard rubric when
+  /// the row comes from it, otherwise translated once on save.
+  nameI18n        String?  @map("name_i18n") @db.Text
+  descriptionI18n String?  @map("description_i18n") @db.Text
+  weight          Float    @default(10)
+  maxScore        Int      @default(100) @map("max_score")
+  position        Int      @default(0)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  teacher User @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@index([teacherId])
+  @@map("criterion_template")
+}
+
+model UserProfile {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @unique @map("user_id")
+  displayName String?  @map("display_name")
+  /// The profile photo any user (student/teacher/admin) can set from
+  /// /profile, stored in Postgres like Subject.imageData and Book.coverData —
+  /// Render's free web service has no persistent disk, so anything saved
+  /// under `uploads/` is gone on the next deploy.
+  avatarData  Bytes?   @map("avatar_data")
+  avatarMime  String?  @map("avatar_mime") @db.VarChar(150)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profile")
+}
+
+model Submission {
+  id                Int      @id @default(autoincrement())
+  studentId         Int?     @map("student_id")
+  assignmentId      Int?     @map("assignment_id")
+  /// Which try this is, 1-based. A student gets `MAX_ATTEMPTS` of them per
+  /// assignment and only their best-scoring one counts, so an attempt can raise
+  /// a grade but never lower it. Rows written before attempts existed are 1.
+  attempt           Int      @default(1)
+  submittedAt       DateTime @default(now()) @map("submitted_at")
+  /// On-disk path multer wrote the upload to. Still used to serve the file
+  /// (and by grading/plagiarism re-checks) as long as this deploy's disk still
+  /// has it — but Render's free web service has no persistent disk, so any
+  /// deploy after the one that received this file wipes it. `fileData` below
+  /// is the durable copy; see the migration note on Book.filePath.
+  filePath          String?  @map("file_path") @db.VarChar(500)
+  flowchartPath     String?  @map("flowchart_path") @db.VarChar(500)
+  presentationPath  String?  @map("presentation_path") @db.VarChar(500)
+  /// Durable copy of the submitted file, stored in Postgres (Neon) so a
+  /// teacher can still open "the student's work" after a redeploy wipes
+  /// `filePath`. Written once, right alongside the disk copy, at submit time.
+  fileData          Bytes?   @map("file_data")
+  fileName          String?  @map("file_name") @db.VarChar(500)
+  fileMime          String?  @map("file_mime") @db.VarChar(150)
+  overallScore      Float?   @map("overall_score")
+  aiFeedbackSummary String?  @map("ai_feedback_summary") @db.Text
+
+  /// Which engine produced the score ("gemini:<model>", "openrouter", "mock").
+  /// Kept so a grade can always be traced back to how it was produced.
+  gradedBy       String?   @map("graded_by")
+  /// Set when a teacher overrides the AI score. `overallScore` keeps the AI
+  /// value; the teacher's number wins wherever a final grade is displayed.
+  teacherScore   Float?    @map("teacher_score")
+  teacherComment String?   @map("teacher_comment") @db.Text
+  reviewedAt     DateTime? @map("reviewed_at")
+  reviewedById   Int?      @map("reviewed_by_id")
+
+  // ---- Originality check ---------------------------------------------------
+  /// SHA-256 of the normalised comparison text. Two submissions with the same
+  /// hash are literally the same work — the cheapest possible copy detection.
+  contentHash         String?   @map("content_hash")
+  /// Space-free run of 8-hex-char word-shingle hashes. This is what every later
+  /// submission is compared against, so a work stays in the corpus for good
+  /// without keeping its full text around a second time.
+  fingerprint         String?
+  /// How many words the fingerprint was built from — a submission too short to
+  /// judge is recorded as checked rather than silently treated as clean.
+  fingerprintWords    Int?      @map("fingerprint_words")
+  /// Highest similarity found against any earlier submission, 0–100.
+  plagiarismScore     Float?    @map("plagiarism_score")
+  /// 'clean' | 'low' | 'moderate' | 'high' | 'duplicate' | 'too_short' | 'skipped'
+  plagiarismStatus    String?   @map("plagiarism_status")
+  /// Points removed from the AI grade because of the similarity found.
+  plagiarismPenalty   Float?    @map("plagiarism_penalty")
+  /// The warning the student reads, already in their language.
+  plagiarismReport    String?   @map("plagiarism_report") @db.Text
+  plagiarismCheckedAt DateTime? @map("plagiarism_checked_at")
+
+  student       User?          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  reviewedBy    User?          @relation("SubmissionReviewer", fields: [reviewedById], references: [id])
+  // Cascade rather than the default SetNull: an orphaned submission has no
+  // rubric, no title and no owning teacher, yet it kept turning up in the
+  // student's list as "Unknown" and kept counting towards their average for
+  // good. Deleting an assignment deletes the work handed in for it.
+  assignment    Assignment?    @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  sectionScores SectionScore[]
+
+  plagiarismMatches   PlagiarismMatch[] @relation("PlagiarismSuspect")
+  plagiarismMatchedBy PlagiarismMatch[] @relation("PlagiarismSource")
+
+  // The attempt limit is checked by counting existing rows, which two requests
+  // arriving together can both pass. This index is what actually makes a fourth
+  // attempt impossible: the second writer of the same attempt number loses.
+  @@unique([assignmentId, studentId, attempt])
+  @@index([assignmentId])
+  @@index([contentHash])
+  @@index([studentId])
+  @@map("submission")
+}
+
+/// One "this work overlaps that work" finding. Written by the originality check
+/// after every submission, kept so a teacher can see exactly whose work was
+/// matched and on which passages before acting on the score.
+model PlagiarismMatch {
+  id                  Int      @id @default(autoincrement())
+  submissionId        Int      @map("submission_id")
+  matchedSubmissionId Int?     @map("matched_submission_id")
+  matchedStudentId    Int?     @map("matched_student_id")
+  /// Final similarity 0–100: the fingerprint overlap, raised to the AI's figure
+  /// when the AI judged the work copied or paraphrased.
+  similarity          Float    @default(0)
+  /// Raw share of the shorter work's shingles found in the other work.
+  lexicalSimilarity   Float?   @map("lexical_similarity")
+  /// The AI's own estimate, present only when the AI pass ran on this pair.
+  aiSimilarity        Float?   @map("ai_similarity")
+  /// 'copy' | 'paraphrase' | 'common_material' | 'independent' | 'lexical'
+  verdict             String?
+  /// Why the AI ruled the way it did, in the student's language.
+  explanation         String?  @db.Text
+  /// JSON array of {suspect, source} passage pairs that matched.
+  snippets            String?
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  submission        Submission  @relation("PlagiarismSuspect", fields: [submissionId], references: [id], onDelete: Cascade)
+  matchedSubmission Submission? @relation("PlagiarismSource", fields: [matchedSubmissionId], references: [id], onDelete: Cascade)
+  matchedStudent    User?       @relation(fields: [matchedStudentId], references: [id], onDelete: SetNull)
+
+  @@index([submissionId])
+  @@map("plagiarism_match")
+}
+
+model SectionScore {
+  id           Int     @id @default(autoincrement())
+  submissionId Int?    @map("submission_id")
+  criterionId  Int?    @map("criterion_id")
+  sectionName  String? @map("section_name")
+  score        Float?
+  maxScore     Int?    @map("max_score")
+  weight       Float? // weight snapshot, so an edited rubric can't rewrite history
+  content      String?
+  feedback     String? @db.Text
+  /// Verbatim quote from the student's work backing this score. Required of the
+  /// model so a teacher can verify the grade instead of trusting it.
+  evidence     String? @db.Text
+
+  submission Submission? @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  criterion  Criterion?  @relation(fields: [criterionId], references: [id], onDelete: SetNull)
+
+  @@map("section_score")
+}
+
+model Setting {
+  id       Int     @id @default(autoincrement())
+  key      String  @unique
+  value    String? @db.Text
+  category String?
+
+  @@map("setting")
+}
+
+model StudentSubject {
+  id         Int      @id @default(autoincrement())
+  studentId  Int      @map("student_id")
+  subjectId  Int      @map("subject_id")
+  enrolledAt DateTime @default(now()) @map("enrolled_at")
+
+  student User    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, subjectId])
+  @@map("student_subject")
+}
+
+model AcademicRating {
+  id                   Int      @id @default(autoincrement())
+  studentId            Int      @map("student_id")
+  subjectId            Int      @map("subject_id")
+  rating               Float    @default(0)
+  totalAssignments     Int      @default(0) @map("total_assignments")
+  completedAssignments Int      @default(0) @map("completed_assignments")
+  averageScore         Float    @default(0) @map("average_score")
+  lastUpdated          DateTime @default(now()) @updatedAt @map("last_updated")
+
+  student User    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  // Cascade, not the default Restrict: a rating is derived data, and leaving it
+  // as a blocker meant "delete subject" silently failed on any subject a student
+  // had ever been rated in.
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, subjectId])
+  @@map("academic_rating")
+}
+
+model Notification {
+  id           Int      @id @default(autoincrement())
+  studentId    Int      @map("student_id")
+  assignmentId Int?     @map("assignment_id")
+  title        String   @db.VarChar(500)
+  message      String?  @db.Text
+  type         String?  @default("assignment")
+  isRead       Boolean  @default(false) @map("is_read")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  student    User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  assignment Assignment? @relation(fields: [assignmentId], references: [id])
+
+  @@map("notification")
+}
+
+model News {
+  id          Int      @id @default(autoincrement())
+  title       String   @db.VarChar(500)
+  content     String   @db.Text
+  authorId    Int?     @map("author_id")
+  isPublished Boolean  @default(true) @map("is_published")
+  /// Who this news item is meant for: 'all' | 'teacher' | 'student'. Read by
+  /// GET /api/news, scoped to the caller's own role (plus 'all') — the piece
+  /// that used to be missing entirely, so a published item reached no one.
+  targetRole  String   @default("all") @map("target_role")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  author User? @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@map("news")
+}
+
+model ActivityLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?     @map("user_id")
+  action    String
+  details   String?  @db.Text
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("activity_log")
+}
+
+model Book {
+  id         Int      @id @default(autoincrement())
+  title      String   @db.VarChar(500)
+  author     String?
+  /// Legacy on-disk path from before files moved into the database. Render's
+  /// free web service has no persistent disk — every deploy starts a fresh
+  /// container, so anything under `uploads/` is gone on the next push and this
+  /// path stops resolving. Kept only so pre-migration rows don't lose the
+  /// filename entirely; new uploads never write here.
+  filePath   String?  @map("file_path") @db.VarChar(500)
+  /// Same legacy caveat as `filePath`, for the cover image.
+  coverImage String?  @map("cover_image") @db.VarChar(500)
+  /// The book file itself, stored in Postgres (Neon) so it survives a deploy.
+  fileData   Bytes?   @map("file_data")
+  fileName   String?  @map("file_name") @db.VarChar(500)
+  fileMime   String?  @map("file_mime") @db.VarChar(150)
+  coverData  Bytes?   @map("cover_data")
+  coverMime  String?  @map("cover_mime") @db.VarChar(150)
+  subjectId  Int?     @map("subject_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  subject   Subject?       @relation(fields: [subjectId], references: [id])
+  downloads BookDownload[]
+
+  @@map("book")
+}
+
+model BookDownload {
+  id           Int      @id @default(autoincrement())
+  bookId       Int      @map("book_id")
+  userId       Int      @map("user_id")
+  downloadedAt DateTime @default(now()) @map("downloaded_at")
+
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  // Without the cascade this row blocks the deletion of any user who ever
+  // downloaded a book — the admin's "delete user" would fail with a foreign-key
+  // error. A download record has no meaning once its user is gone.
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("book_download")
+}
+
+/// A live video lesson, carried over Agora RTC (see AGORA_APP_ID). The media
+/// routing itself is Agora's service, not this database — this row is only
+/// the schedule/roster/status wrapper the app needs to let a teacher start one,
+/// issue join tokens to the right students, and track who was in it.
+model LiveSession {
+  id          Int       @id @default(autoincrement())
+  title       String
+  /// Unique, unguessable Agora channel name (crypto.randomUUID() + a slug of
+  /// the title) — never the raw title, so a student cannot walk into a call
+  /// by guessing its name. Agora tokens are scoped to this exact name.
+  roomName    String    @unique @map("room_name")
+  subjectId   Int?      @map("subject_id")
+  groupId     Int?      @map("group_id")
+  teacherId   Int       @map("teacher_id")
+  scheduledAt DateTime  @map("scheduled_at")
+  /// 'scheduled' | 'live' | 'ended' | 'cancelled'
+  status      String    @default("scheduled")
+  startedAt   DateTime? @map("started_at")
+  endedAt     DateTime? @map("ended_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  subject      Subject?          @relation(fields: [subjectId], references: [id])
+  group        Group?            @relation(fields: [groupId], references: [id])
+  teacher      User              @relation(fields: [teacherId], references: [id])
+  participants LiveParticipant[]
+
+  @@index([groupId])
+  @@index([subjectId])
+  @@index([status])
+  @@map("live_session")
+}
+
+/// One user's presence in one LiveSession, written when a join token is issued
+/// and closed off when they leave. Kept mainly as an attendance trail — the
+/// call itself works without this row existing.
+model LiveParticipant {
+  id        Int       @id @default(autoincrement())
+  sessionId Int       @map("session_id")
+  userId    Int       @map("user_id")
+  joinedAt  DateTime  @default(now()) @map("joined_at")
+  leftAt    DateTime? @map("left_at")
+  isTeacher Boolean   @default(false) @map("is_teacher")
+
+  session LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+  @@map("live_participant")
+}

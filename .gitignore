@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+*.log
+backend/uploads/
+backend/admin.txt
+.agents

@@ -3,6 +3,7 @@ import { Row, Col, Card, Empty, Badge } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { subjectsApi } from '../../api';
+import { mediaUrl } from '../../api/client';
 import Loading from '../../components/Loading';
 import DashboardHero from '../../components/DashboardHero';
 import { getSubjectVisual } from '../../utils/subjectVisual';
@@ -39,7 +40,7 @@ export default function StudentSubjects() {
                     s.image_url ? (
                       <img
                         alt={s.name}
-                        src={s.image_url}
+                        src={mediaUrl(s.image_url)}
                         style={{ height: 128, width: '100%', objectFit: 'cover' }}
                       />
                     ) : (

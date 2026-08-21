@@ -1,5 +1,6 @@
 import { Avatar } from 'antd';
 import { initials } from '../utils/format';
+import { mediaUrl } from '../api/client';
 
 // A user's circular picture — the photo they set from /profile, or their
 // initials on a brand tile when they haven't set one. AntD's <Avatar> falls
@@ -9,7 +10,7 @@ export default function UserAvatar({ name, src, size = 32, style, ...rest }) {
   return (
     <Avatar
       size={size}
-      src={src || undefined}
+      src={mediaUrl(src) || undefined}
       style={{ background: 'var(--brand)', color: '#fff', fontWeight: 600, flex: '0 0 auto', ...style }}
       {...rest}
     >

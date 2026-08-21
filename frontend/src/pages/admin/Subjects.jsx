@@ -3,6 +3,7 @@ import { Table, Button, Space, Modal, Form, Input, Upload, message, Popconfirm }
 import { PlusOutlined, DeleteOutlined, EditOutlined, DatabaseOutlined, UploadOutlined } from '../../icons';
 import { useTranslation } from 'react-i18next';
 import { adminApi } from '../../api';
+import { mediaUrl } from '../../api/client';
 import { apiError } from '../../utils/format';
 import DashboardHero from '../../components/DashboardHero';
 import { getSubjectVisual } from '../../utils/subjectVisual';
@@ -66,7 +67,7 @@ export default function AdminSubjects() {
     {
       title: '', dataIndex: 'image_url', width: 56,
       render: (url, r) => {
-        if (url) return <img src={url} alt={r.name} style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover' }} />;
+        if (url) return <img src={mediaUrl(url)} alt={r.name} style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover' }} />;
         // No picture uploaded yet — the same name-matched icon/gradient the
         // student cards fall back to, so this preview never looks broken.
         const { Icon, gradient } = getSubjectVisual(r.name);

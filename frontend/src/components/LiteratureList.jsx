@@ -3,6 +3,7 @@ import { Row, Col, Card, Button, Typography, Empty, Modal, Form, Input, Upload, 
 import { DownloadOutlined, PlusOutlined, DeleteOutlined, EditOutlined, ReadOutlined, UploadOutlined } from '../icons';
 import { useTranslation } from 'react-i18next';
 import { literatureApi, subjectsApi } from '../api';
+import { mediaUrl } from '../api/client';
 import Loading from './Loading';
 import { apiError } from '../utils/format';
 
@@ -95,7 +96,7 @@ export default function LiteratureList({ canManage = false }) {
                 cover={b.cover_url ? (
                   <img
                     alt={b.title}
-                    src={b.cover_url}
+                    src={mediaUrl(b.cover_url)}
                     style={{ height: 140, width: '100%', objectFit: 'cover' }}
                   />
                 ) : (

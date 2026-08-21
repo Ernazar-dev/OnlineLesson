@@ -3,6 +3,7 @@ import { Table, Avatar, Spin, Empty } from 'antd';
 import { UserOutlined, TrophyOutlined } from '../../icons';
 import { useTranslation } from 'react-i18next';
 import { adminApi } from '../../api';
+import { mediaUrl } from '../../api/client';
 import { useAuth } from '../../store/auth';
 
 /* ═══════════ Metall ranglar palitrasi ═══════════ */
@@ -151,7 +152,7 @@ function PodiumColumn({ entry, place, isMe }) {
             <Avatar
               size={isGold ? 82 : 66}
               icon={<UserOutlined />}
-              src={entry.avatar_url}
+              src={mediaUrl(entry.avatar_url)}
               style={{ background: '#fff', color: m.text, display: 'block' }}
             />
           </span>
@@ -217,7 +218,7 @@ export default function AdminLeaderboard() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Avatar
             icon={<UserOutlined />}
-            src={r.avatar_url}
+            src={mediaUrl(r.avatar_url)}
             style={{
               background: r.id === user?.id ? 'var(--lb-accent)' : 'var(--lb-line)',
               color: r.id === user?.id ? '#fff' : 'var(--lb-muted)',

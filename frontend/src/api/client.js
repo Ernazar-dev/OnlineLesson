@@ -4,6 +4,25 @@ import { getLang } from '../i18n';
 // Empty baseURL => same-origin (works with the dev proxy and single-service prod deploy)
 const baseURL = import.meta.env.VITE_API_URL || '';
 
+/**
+ * Turns a server-relative media path (avatar/cover/subject picture — anything
+ * the API hands back as `/api/.../123`, meant for a plain <img src>) into a
+ * URL that actually reaches the backend.
+ *
+ * axios already resolves every api.get/post call against `baseURL`, but a raw
+ * `<img src={x.avatar_url}>` is resolved by the browser against the *page's*
+ * origin, not axios's. Those are only the same origin on the single-service
+ * deploy; the moment the frontend is hosted separately (VITE_API_URL set —
+ * e.g. a Render Static Site in front of a separate backend Web Service) every
+ * such image 404s into the SPA's own catch-all and quietly falls back to its
+ * placeholder, even though the JSON API call that fetched the URL worked fine.
+ */
+export function mediaUrl(path) {
+  if (!path) return path;
+  if (!baseURL || /^([a-z]+:)?\/\//i.test(path)) return path; // already absolute, or same-origin deploy
+  return `${baseURL}${path}`;
+}
+
 // No request may hang forever. Without a timeout a connection the host quietly
 // stops answering leaves axios waiting for as long as the tab is open, and the
 // only thing the user sees is a button that spins and never stops.

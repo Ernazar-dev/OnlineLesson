@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card, Form, Input, Button, message, Modal, Tabs, Typography, Avatar, Tag, Space, Descriptions, Row, Col, Skeleton, Upload, Popconfirm } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { usersApi } from '../api';
+import { mediaUrl } from '../api/client';
 import { useAuth } from '../store/auth';
 import { apiError, formatUzPhone, UZ_PHONE_RE, formatDate, formatDateTime, initials } from '../utils/format';
 import DashboardHero from '../components/DashboardHero';
@@ -105,7 +106,7 @@ export default function Profile() {
   // numbers for — without it the identity card takes the full row instead of
   // leaving a bare gap where the sidebar would have been.
   const hasStats = !!profile.stats;
-  const avatarSrc = profile.avatar_url ? `${profile.avatar_url}?v=${avatarVersion}` : null;
+  const avatarSrc = profile.avatar_url ? `${mediaUrl(profile.avatar_url)}?v=${avatarVersion}` : null;
 
   const infoCard = (
     <Card
